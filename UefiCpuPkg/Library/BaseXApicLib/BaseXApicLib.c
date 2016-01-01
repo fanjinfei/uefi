@@ -645,6 +645,20 @@ GetApicTimerInitCount (
 }
 
 /**
+  Write a initial count value to the init-count register.
+
+  @param  InitCount a initial count Value to be written.
+**/
+VOID
+EFIAPI
+SetApicTimerInitCount (
+  IN UINT32 InitCount
+  )
+{
+  WriteLocalApicReg (XAPIC_TIMER_INIT_COUNT_OFFSET, InitCount);
+}
+
+/**
   Read the current count value from the current-count register.
 
   @return The current count value read from the current-count register.

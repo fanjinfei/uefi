@@ -263,6 +263,12 @@ GetApicTimerInitCount (
   VOID
   );
 
+VOID
+EFIAPI
+SetApicTimerInitCount (
+  IN UINT32 InitCount
+  );
+
 /**
   Read the current count value from the current-count register.
 
