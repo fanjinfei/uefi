@@ -317,9 +317,12 @@ QemuInitializeRam (
     //
     // MTRRs disabled, fixed MTRRs disabled, default type is uncached
     //
-    ASSERT ((MtrrSettings.MtrrDefType & BIT11) == 0);
-    ASSERT ((MtrrSettings.MtrrDefType & BIT10) == 0);
-    ASSERT ((MtrrSettings.MtrrDefType & 0xFF) == 0);
+    if (!(((MtrrSettings.MtrrDefType & BIT11) == 0) &&
+          ((MtrrSettings.MtrrDefType & BIT10) == 0) &&
+          ((MtrrSettings.MtrrDefType & 0xFF) == 0))) {
+            // Skip initializing MTRRs.
+            return;
+    }
 
     //
     // flip default type to writeback
