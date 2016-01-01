@@ -13,6 +13,7 @@
 **/
 
 #include "DxeMain.h"
+#include "Imem.h"
 
 #define IS_UEFI_MEMORY_PROFILE_ENABLED ((PcdGet8 (PcdMemoryProfilePropertyMask) & BIT0) != 0)
 
@@ -737,8 +738,9 @@ UnregisterMemoryProfileImage (
 
 /**
   Return if this memory type needs to be recorded into memory profile.
-  If BIOS memory type (0 ~ EfiMaxMemoryType), it checks bit (1 << MemoryType).
+  If BIOS memory type (0 ~ EfiMaxMemoryType - 1), it checks bit (1 << MemoryType).
   If OS memory type (0x80000000 ~ 0xFFFFFFFF), it checks bit63 - 0x8000000000000000.
+  If OEM memory type (0x70000000 ~ 0x7FFFFFFF), it checks bit62 - 0x4000000000000000.
 
   @param MemoryType     Memory type.
 
@@ -753,8 +755,10 @@ CoreNeedRecordProfile (
 {
   UINT64 TestBit;
 
-  if ((UINT32) MemoryType >= 0x80000000) {
+  if ((UINT32) MemoryType >= MEMORY_TYPE_OS_RESERVED_MIN) {
     TestBit = BIT63;
+  } else if ((UINT32) MemoryType >= MEMORY_TYPE_OEM_RESERVED_MIN) {
+    TestBit = BIT62;
   } else {
     TestBit = LShiftU64 (1, MemoryType);
   }
@@ -768,21 +772,24 @@ CoreNeedRecordProfile (
 
 /**
   Convert EFI memory type to profile memory index. The rule is:
-  If BIOS memory type (0 ~ EfiMaxMemoryType), ProfileMemoryIndex = MemoryType.
+  If BIOS memory type (0 ~ EfiMaxMemoryType - 1), ProfileMemoryIndex = MemoryType.
   If OS memory type (0x80000000 ~ 0xFFFFFFFF), ProfileMemoryIndex = EfiMaxMemoryType.
+  If OEM memory type (0x70000000 ~ 0x7FFFFFFF), ProfileMemoryIndex = EfiMaxMemoryType + 1.
 
   @param MemoryType     Memory type.
 
-  @return EFI memory type as profile memory index.
+  @return Profile memory index.
 
 **/
-EFI_MEMORY_TYPE
+UINTN
 GetProfileMemoryIndex (
   IN EFI_MEMORY_TYPE    MemoryType
   )
 {
-  if ((UINT32) MemoryType >= 0x80000000) {
+  if ((UINT32) MemoryType >= MEMORY_TYPE_OS_RESERVED_MIN) {
     return EfiMaxMemoryType;
+  } else if ((UINT32) MemoryType >= MEMORY_TYPE_OEM_RESERVED_MIN) {
+    return EfiMaxMemoryType + 1;
   } else {
     return MemoryType;
   }
@@ -817,7 +824,7 @@ CoreUpdateProfileAllocate (
   MEMORY_PROFILE_CONTEXT_DATA       *ContextData;
   MEMORY_PROFILE_DRIVER_INFO_DATA   *DriverInfoData;
   MEMORY_PROFILE_ALLOC_INFO_DATA    *AllocInfoData;
-  EFI_MEMORY_TYPE                   ProfileMemoryIndex;
+  UINTN                             ProfileMemoryIndex;
 
   AllocInfoData = NULL;
 
@@ -970,7 +977,7 @@ CoreUpdateProfileFree (
   LIST_ENTRY                       *DriverInfoList;
   MEMORY_PROFILE_DRIVER_INFO_DATA  *ThisDriverInfoData;
   MEMORY_PROFILE_ALLOC_INFO_DATA   *AllocInfoData;
-  EFI_MEMORY_TYPE                  ProfileMemoryIndex;
+  UINTN                            ProfileMemoryIndex;
 
   ContextData = GetMemoryProfileContext ();
   if (ContextData == NULL) {

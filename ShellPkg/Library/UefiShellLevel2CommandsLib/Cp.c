@@ -2,7 +2,7 @@
   Main file for cp shell level 2 function.
 
   (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -360,7 +360,7 @@ ValidateAndCopyFiles(
 
     NewSize =  StrSize(CleanFilePathStr);
     NewSize += StrSize(Node->FullName);
-    NewSize += (Cwd == NULL)? 0 : StrSize(Cwd);
+    NewSize += (Cwd == NULL)? 0 : (StrSize(Cwd) + sizeof(CHAR16));
     if (NewSize > PathSize) {
       PathSize = NewSize;
     }
@@ -427,20 +427,21 @@ ValidateAndCopyFiles(
         // simple copy of a single file
         //
         if (Cwd != NULL) {
-          StrnCpy(DestPath, Cwd, PathSize/sizeof(CHAR16)-1);
+          StrCpyS(DestPath, PathSize / sizeof(CHAR16), Cwd);
+          StrCatS(DestPath, PathSize / sizeof(CHAR16), L"\\");
         } else {
           ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_DIR_NF), gShellLevel2HiiHandle, L"cp", CleanFilePathStr);  
           FreePool (CleanFilePathStr);
           return (SHELL_INVALID_PARAMETER);
         }
         if (DestPath[StrLen(DestPath)-1] != L'\\' && CleanFilePathStr[0] != L'\\') {
-          StrnCat(DestPath, L"\\", PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+          StrCatS(DestPath, PathSize / sizeof(CHAR16), L"\\");
         } else if (DestPath[StrLen(DestPath)-1] == L'\\' && CleanFilePathStr[0] == L'\\') {
           ((CHAR16*)DestPath)[StrLen(DestPath)-1] = CHAR_NULL;
         }
-        StrnCat(DestPath, CleanFilePathStr, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), CleanFilePathStr);
       } else {
-        StrnCpy(DestPath, CleanFilePathStr, PathSize/sizeof(CHAR16) -1);
+        StrCpyS(DestPath, PathSize/sizeof(CHAR16), CleanFilePathStr);
       }
     } else {
       //
@@ -455,44 +456,46 @@ ValidateAndCopyFiles(
          // Copy to the root of CWD
          //
         if (Cwd != NULL) {
-          StrnCpy(DestPath, Cwd, PathSize/sizeof(CHAR16) -1);
+          StrCpyS(DestPath, PathSize/sizeof(CHAR16), Cwd);
+          StrCatS(DestPath, PathSize/sizeof(CHAR16), L"\\");
         } else {
           ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_DIR_NF), gShellLevel2HiiHandle, L"cp",  CleanFilePathStr); 
           FreePool(CleanFilePathStr);
           return (SHELL_INVALID_PARAMETER);
         }
         while (PathRemoveLastItem(DestPath));
-        StrnCat(DestPath, CleanFilePathStr+1, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
-        StrnCat(DestPath, Node->FileName, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), CleanFilePathStr+1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), Node->FileName);
       } else if (StrStr(CleanFilePathStr, L":") == NULL) {
         if (Cwd != NULL) {
-          StrnCpy(DestPath, Cwd, PathSize/sizeof(CHAR16) -1);
+          StrCpyS(DestPath, PathSize/sizeof(CHAR16), Cwd);
+          StrCatS(DestPath, PathSize/sizeof(CHAR16), L"\\");
         } else {
           ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_DIR_NF), gShellLevel2HiiHandle, L"cp", CleanFilePathStr);  
           FreePool(CleanFilePathStr);
           return (SHELL_INVALID_PARAMETER);
         }
         if (DestPath[StrLen(DestPath)-1] != L'\\' && CleanFilePathStr[0] != L'\\') {
-          StrnCat(DestPath, L"\\", PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+          StrCatS(DestPath, PathSize/sizeof(CHAR16), L"\\");
         } else if (DestPath[StrLen(DestPath)-1] == L'\\' && CleanFilePathStr[0] == L'\\') {
           ((CHAR16*)DestPath)[StrLen(DestPath)-1] = CHAR_NULL;
         }
-        StrnCat(DestPath, CleanFilePathStr, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), CleanFilePathStr);
         if (CleanFilePathStr[StrLen(CleanFilePathStr)-1] != L'\\' && Node->FileName[0] != L'\\') {
-          StrnCat(DestPath, L"\\", PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+          StrCatS(DestPath, PathSize/sizeof(CHAR16), L"\\");
         } else if (CleanFilePathStr[StrLen(CleanFilePathStr)-1] == L'\\' && Node->FileName[0] == L'\\') {
           ((CHAR16*)DestPath)[StrLen(DestPath)-1] = CHAR_NULL;
         }
-        StrnCat(DestPath, Node->FileName, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), Node->FileName);
 
       } else {
-        StrnCpy(DestPath, CleanFilePathStr, PathSize/sizeof(CHAR16) -1);
+        StrCpyS(DestPath, PathSize/sizeof(CHAR16), CleanFilePathStr);
         if (CleanFilePathStr[StrLen(CleanFilePathStr)-1] != L'\\' && Node->FileName[0] != L'\\') {
-          StrnCat(DestPath, L"\\", PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+          StrCatS(DestPath, PathSize/sizeof(CHAR16), L"\\");
         } else if (CleanFilePathStr[StrLen(CleanFilePathStr)-1] == L'\\' && Node->FileName[0] == L'\\') {
           ((CHAR16*)CleanFilePathStr)[StrLen(CleanFilePathStr)-1] = CHAR_NULL;
         }
-        StrnCat(DestPath, Node->FileName, PathSize/sizeof(CHAR16) - StrLen(DestPath) -1);
+        StrCatS(DestPath, PathSize/sizeof(CHAR16), Node->FileName);
       }
     }
     
@@ -644,6 +647,7 @@ ShellCommandRunCp (
   BOOLEAN             SilentMode;
   BOOLEAN             RecursiveMode;
   CONST CHAR16        *Cwd;
+  CHAR16              *FullCwd;
 
   ProblemParam        = NULL;
   ShellStatus         = SHELL_SUCCESS;
@@ -712,7 +716,11 @@ ShellCommandRunCp (
             ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_FILE_NF), gShellLevel2HiiHandle, L"cp", ShellCommandLineGetRawValue(Package, 1));  
             ShellStatus = SHELL_NOT_FOUND;
           } else  {
-            ShellStatus = ProcessValidateAndCopyFiles(FileList, Cwd, SilentMode, RecursiveMode);
+            FullCwd = AllocateZeroPool(StrSize(Cwd) + sizeof(CHAR16));
+            ASSERT (FullCwd != NULL);
+            StrCpyS(FullCwd, StrSize(Cwd)/sizeof(CHAR16)+1, Cwd);
+            ShellStatus = ProcessValidateAndCopyFiles(FileList, FullCwd, SilentMode, RecursiveMode);
+            FreePool(FullCwd);
           }
         }
 
