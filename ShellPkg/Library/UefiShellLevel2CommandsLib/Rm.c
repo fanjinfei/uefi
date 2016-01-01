@@ -2,7 +2,7 @@
   Main file for attrib shell level 2 function.
 
   (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -132,9 +132,9 @@ CascadeDelete(
           if (TempName == NULL) {
             ShellStatus = SHELL_OUT_OF_RESOURCES;
           } else {
-            StrnCpy(TempName, Node->FullName, NewSize/sizeof(CHAR16) -1);
+            StrCpyS(TempName, NewSize/sizeof(CHAR16), Node->FullName);
             TempName[StrStr(TempName, L":")+1-TempName] = CHAR_NULL;
-            StrnCat(TempName, Node2->FullName, NewSize/sizeof(CHAR16) -1 - StrLen(TempName));
+            StrCatS(TempName, NewSize/sizeof(CHAR16), Node2->FullName);
             FreePool((VOID*)Node2->FullName);
             Node2->FullName = TempName;
 
@@ -188,7 +188,7 @@ CascadeDelete(
 }
 
 /**
-  Determins if a Node is a valid delete target.  Will prevent deleting the root directory.
+  Determines if a Node is a valid delete target.  Will prevent deleting the root directory.
 
   @param[in] List       RESERVED.  Not used.
   @param[in] Node       The node to analyze.
@@ -231,7 +231,9 @@ IsValidDeleteTarget(
   Pattern       = NULL;
   SearchString  = NULL;
   Size          = 0;
-  Pattern       = StrnCatGrow(&Pattern     , NULL, TempLocation  , 0);
+  Pattern       = StrnCatGrow(&Pattern, &Size, TempLocation  , 0);
+  Pattern       = StrnCatGrow(&Pattern, &Size, L"\\"  , 0);
+  Size = 0;
   SearchString  = StrnCatGrow(&SearchString, &Size, Node->FullName, 0);
   if (!EFI_ERROR(ShellIsDirectory(SearchString))) {
     SearchString  = StrnCatGrow(&SearchString, &Size, L"\\", 0);

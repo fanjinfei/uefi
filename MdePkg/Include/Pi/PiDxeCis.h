@@ -53,6 +53,11 @@ typedef enum {
   /// This memory supports byte-addressable non-volatility. 
   ///
   EfiGcdMemoryTypePersistentMemory,
+  ///
+  /// A memory region that provides higher reliability relative to other memory in the
+  /// system. If all memory has the same reliability, then this bit is not used.
+  ///
+  EfiGcdMemoryTypeMoreReliable,
   EfiGcdMemoryTypeMaximum
 } EFI_GCD_MEMORY_TYPE;
 
@@ -687,7 +692,7 @@ EFI_STATUS
 //
 #define DXE_SERVICES_SIGNATURE            0x565245535f455844ULL
 #define DXE_SPECIFICATION_MAJOR_REVISION  1
-#define DXE_SPECIFICATION_MINOR_REVISION  30
+#define DXE_SPECIFICATION_MINOR_REVISION  40
 #define DXE_SERVICES_REVISION             ((DXE_SPECIFICATION_MAJOR_REVISION<<16) | (DXE_SPECIFICATION_MINOR_REVISION))
 
 typedef struct {
@@ -731,20 +736,5 @@ typedef struct {
 } DXE_SERVICES;
 
 typedef DXE_SERVICES EFI_DXE_SERVICES;
-
-
-/**
-  The function prototype for invoking a function on an Application Processor.
-
-  This definition is used by the UEFI MP Serices Protocol, and the
-  PI SMM System Table.
-
-  @param[in,out] Buffer  The pointer to private data buffer.
-**/
-typedef
-VOID
-(EFIAPI *EFI_AP_PROCEDURE)(
-  IN OUT VOID  *Buffer
-  );
 
 #endif

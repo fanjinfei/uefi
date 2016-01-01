@@ -3229,13 +3229,13 @@ QueryTable (
     //
     if ((High > Low && Key >= Low && Key <= High) 
       || (Table[Index].Key == Key)) {
-      StrnCpy (Info, Table[Index].Info, InfoLen-1);
-      StrnCat (Info, L"\n", InfoLen - 1 - StrLen(Info));
+      StrnCpyS (Info, InfoLen, Table[Index].Info, InfoLen - 1);
+      StrnCatS (Info, InfoLen, L"\n", InfoLen - 1 - StrLen(Info));
       return Key;
     }
   }
 
-  StrnCpy (Info, L"Undefined Value\n", InfoLen - 1);
+  StrCpyS (Info, InfoLen, L"Undefined Value\n");
   return QUERY_TABLE_UNFOUND;
 }
 

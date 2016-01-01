@@ -784,11 +784,11 @@ def BuildExDataBase(Dict):
  
     DbTotal = [InitValueUint64, VardefValueUint64, InitValueUint32, VardefValueUint32, VpdHeadValue, ExMapTable, 
                LocalTokenNumberTable, GuidTable, StringHeadValue,  PcdNameOffsetTable,VariableTable,SkuTable, StringTableLen, PcdTokenTable,PcdCNameTable, 
-               SizeTableValue, InitValueUint16, VardefValueUint16,InitValueUint8, VardefValueUint8, InitValueBoolean,
+               SizeTableValue, InitValueUint16, VardefValueUint16, InitValueUint8, VardefValueUint8, InitValueBoolean,
                VardefValueBoolean, SkuidValue, SkuIndexValue, UnInitValueUint64, UnInitValueUint32, UnInitValueUint16, UnInitValueUint8, UnInitValueBoolean]
     DbItemTotal = [DbInitValueUint64, DbVardefValueUint64, DbInitValueUint32, DbVardefValueUint32, DbVpdHeadValue, DbExMapTable, 
                DbLocalTokenNumberTable, DbGuidTable, DbStringHeadValue,  DbPcdNameOffsetTable,DbVariableTable,DbSkuTable, DbStringTableLen, DbPcdTokenTable, DbPcdCNameTable, 
-               DbSizeTableValue, DbInitValueUint16, DbVardefValueUint16,DbInitValueUint8, DbVardefValueUint8, DbInitValueBoolean,
+               DbSizeTableValue, DbInitValueUint16, DbVardefValueUint16, DbInitValueUint8, DbVardefValueUint8, DbInitValueBoolean,
                DbVardefValueBoolean, DbSkuidValue, DbSkuIndexValue, DbUnInitValueUint64, DbUnInitValueUint32, DbUnInitValueUint16, DbUnInitValueUint8, DbUnInitValueBoolean]
     
     # SkuidValue is the last table in the init table items
@@ -836,6 +836,9 @@ def BuildExDataBase(Dict):
                 DbOffset += DbItemTotal[DbIndex].GetInterOffset(Offset)
                 break
             DbOffset += DbItemTotal[DbIndex].GetListSize()
+            if DbIndex + 1 == InitTableNum:
+                if DbOffset % 8:
+                    DbOffset += (8 - DbOffset % 8)
         else:
             assert(False)
 
@@ -867,6 +870,9 @@ def BuildExDataBase(Dict):
                     DbOffset += DbItemTotal[DbIndex].GetInterOffset(VariableOffset)
                     break
                 DbOffset += DbItemTotal[DbIndex].GetListSize()
+                if DbIndex + 1 == InitTableNum:
+                    if DbOffset % 8:
+                        DbOffset += (8 - DbOffset % 8)
             else:
                 assert(False)
             if isinstance(VariableRefTable[0],list):
@@ -908,6 +914,8 @@ def BuildExDataBase(Dict):
     for Item in (DbUnInitValueUint64, DbUnInitValueUint32, DbUnInitValueUint16, DbUnInitValueUint8, DbUnInitValueBoolean):
         UninitDataBaseSize += Item.GetListSize()
     
+    if (DbTotalLength - UninitDataBaseSize) % 8:
+        DbTotalLength += (8 - (DbTotalLength - UninitDataBaseSize) % 8)
     # Construct the database buffer
     Guid = "{0x3c7d193c, 0x682c, 0x4c14, 0xa6, 0x8f, 0x55, 0x2d, 0xea, 0x4f, 0x43, 0x7e}"
     Guid = StringArrayToList(Guid)
@@ -977,6 +985,10 @@ def BuildExDataBase(Dict):
         b = Item.PackData()
         Buffer += b  
         if Index == InitTableNum:
+            if len(Buffer) % 8:
+                for num in range(8 - len(Buffer) % 8):
+                    b = pack('=B', Pad)
+                    Buffer += b
             break        
     return Buffer
 
@@ -1331,7 +1343,7 @@ def CreatePcdDatabasePhaseSpecificAutoGen (Platform, Phase):
                         Dict['STRING_TABLE_VALUE'].append(DefaultValueBinStructure)
                     elif Sku.DefaultValue[0] == '"':
                         DefaultValueBinStructure = StringToArray(Sku.DefaultValue)
-                        Size = len(Sku.DefaultValue) -2 + 1
+                        Size = len(Sku.DefaultValue) - 2 + 1
                         Dict['STRING_TABLE_VALUE'].append(DefaultValueBinStructure)
                     elif Sku.DefaultValue[0] == '{':
                         DefaultValueBinStructure = StringToArray(Sku.DefaultValue)
@@ -1363,7 +1375,7 @@ def CreatePcdDatabasePhaseSpecificAutoGen (Platform, Phase):
                         Pcd.InitString = 'INIT'
                     else:
                         if int(Sku.DefaultValue, 0) != 0:
-                            Pcd.InitString = 'INIT'              
+                            Pcd.InitString = 'INIT'
                 #
                 # For UNIT64 type PCD's value, ULL should be append to avoid
                 # warning under linux building environment.

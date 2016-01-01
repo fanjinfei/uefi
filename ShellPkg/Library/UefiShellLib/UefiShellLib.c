@@ -673,6 +673,7 @@ ShellOpenFileByName(
   EFI_STATUS                    Status;
   EFI_FILE_INFO                 *FileInfo;
   CHAR16                        *FileNameCopy;
+  EFI_STATUS                    Status2;
 
   //
   // ASSERT if FileName is NULL
@@ -702,8 +703,9 @@ ShellOpenFileByName(
       }
       PathCleanUpDirectories (FileNameCopy);
       if (PathRemoveLastItem (FileNameCopy)) {
-        ShellCreateDirectory (FileNameCopy, FileHandle);
-        ShellCloseFile (FileHandle);
+        if (!EFI_ERROR(ShellCreateDirectory (FileNameCopy, FileHandle))) {
+          ShellCloseFile (FileHandle);
+        }
       }
       SHELL_FREE_NON_NULL (FileNameCopy);
     }
@@ -718,8 +720,12 @@ ShellOpenFileByName(
       FileInfo = FileFunctionMap.GetFileInfo(*FileHandle);
       ASSERT(FileInfo != NULL);
       FileInfo->Attribute = Attributes;
-      Status = FileFunctionMap.SetFileInfo(*FileHandle, FileInfo);
+      Status2 = FileFunctionMap.SetFileInfo(*FileHandle, FileInfo);
       FreePool(FileInfo);
+      if (EFI_ERROR (Status2)) {
+        gEfiShellProtocol->CloseFile(*FileHandle);
+      }
+      Status = Status2;
     }
     return (Status);
   }
@@ -1275,6 +1281,8 @@ ShellExecute (
   name. If the DeviceName is not NULL, it returns the current directory name
   on specified drive.
 
+  Note that the current directory string should exclude the tailing backslash character.
+
   @param DeviceName             the name of the drive to get directory on
 
   @retval NULL                  the directory does not exist
@@ -1707,14 +1715,15 @@ ShellFindFilePath (
 
   Path = ShellGetEnvironmentVariable(L"cwd");
   if (Path != NULL) {
-    Size = StrSize(Path);
+    Size = StrSize(Path) + sizeof(CHAR16);
     Size += StrSize(FileName);
     TestPath = AllocateZeroPool(Size);
     if (TestPath == NULL) {
       return (NULL);
     }
-    StrnCpy(TestPath, Path, Size/sizeof(CHAR16) - 1);
-    StrnCat(TestPath, FileName, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
+    StrCpyS(TestPath, Size/sizeof(CHAR16), Path);
+    StrCatS(TestPath, Size/sizeof(CHAR16), L"\\");
+    StrCatS(TestPath, Size/sizeof(CHAR16), FileName);
     Status = ShellOpenFileByName(TestPath, &Handle, EFI_FILE_MODE_READ, 0);
     if (!EFI_ERROR(Status)){
       if (FileHandleIsDirectory(Handle) != EFI_SUCCESS) {
@@ -1746,12 +1755,12 @@ ShellFindFilePath (
           *TempChar = CHAR_NULL;
         }
         if (TestPath[StrLen(TestPath)-1] != L'\\') {
-          StrnCat(TestPath, L"\\", Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
+          StrCatS(TestPath, Size/sizeof(CHAR16), L"\\");
         }
         if (FileName[0] == L'\\') {
           FileName++;
         }
-        StrnCat(TestPath, FileName, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
+        StrCatS(TestPath, Size/sizeof(CHAR16), FileName);
         if (StrStr(Walker, L";") != NULL) {
           Walker = StrStr(Walker, L";") + 1;
         } else {
@@ -1820,9 +1829,9 @@ ShellFindFilePathEx (
     return (NULL);
   }
   for (ExtensionWalker = FileExtension, TempChar2 = (CHAR16*)FileExtension;  TempChar2 != NULL ; ExtensionWalker = TempChar2 + 1){
-    StrnCpy(TestPath, FileName, Size/sizeof(CHAR16) - 1);
+    StrCpyS(TestPath, Size/sizeof(CHAR16), FileName);
     if (ExtensionWalker != NULL) {
-      StrnCat(TestPath, ExtensionWalker, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
+      StrCatS(TestPath, Size/sizeof(CHAR16), ExtensionWalker);
     }
     TempChar = StrStr(TestPath, L";");
     if (TempChar != NULL) {
@@ -2109,10 +2118,19 @@ InternalCommandLineParse (
       CurrentItemPackage->Value = ReallocatePool(ValueSize, CurrentValueSize, CurrentItemPackage->Value);
       ASSERT(CurrentItemPackage->Value != NULL);
       if (ValueSize == 0) {
-        StrnCpy(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1);
+        StrCpyS( CurrentItemPackage->Value, 
+                  CurrentValueSize/sizeof(CHAR16), 
+                  Argv[LoopCounter]
+                  );
       } else {
-        StrnCat(CurrentItemPackage->Value, L" ", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
-        StrnCat(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+        StrCatS( CurrentItemPackage->Value, 
+                  CurrentValueSize/sizeof(CHAR16), 
+                  L" "
+                  );
+        StrCatS( CurrentItemPackage->Value, 
+                  CurrentValueSize/sizeof(CHAR16), 
+                  Argv[LoopCounter]
+                  );
       }
       ValueSize += StrSize(Argv[LoopCounter]) + sizeof(CHAR16);
       
@@ -2512,7 +2530,7 @@ ShellCommandLineGetCount(
 }
 
 /**
-  Determins if a parameter is duplicated.
+  Determines if a parameter is duplicated.
 
   If Param is not NULL then it will point to a callee allocated string buffer
   with the parameter value if a duplicate is found.
@@ -2635,14 +2653,14 @@ ShellCopySearchAndReplace(
         FreePool(Replace);
         return (EFI_BUFFER_TOO_SMALL);
       }
-      StrnCat(NewString, Replace, NewSize/sizeof(CHAR16) - 1 - StrLen(NewString));
+      StrCatS(NewString, NewSize/sizeof(CHAR16), Replace);
     } else {
       Size = StrSize(NewString);
       if (Size + sizeof(CHAR16) > NewSize) {
         FreePool(Replace);
         return (EFI_BUFFER_TOO_SMALL);
       }
-      StrnCat(NewString, SourceString, 1);
+      StrnCatS(NewString, NewSize/sizeof(CHAR16), SourceString, 1);
       SourceString++;
     }
   }
@@ -3245,7 +3263,8 @@ StrnCatGrow (
       *CurrentSize = NewSize;
     }
   } else {
-    *Destination = AllocateZeroPool((Count+1)*sizeof(CHAR16));
+    NewSize = (Count+1)*sizeof(CHAR16);
+    *Destination = AllocateZeroPool(NewSize);
   }
 
   //
@@ -3254,7 +3273,9 @@ StrnCatGrow (
   if (*Destination == NULL) {
     return (NULL);
   }
-  return StrnCat(*Destination, Source, Count);
+  
+  StrnCatS(*Destination, NewSize/sizeof(CHAR16), Source, Count);
+  return *Destination;
 }
 
 /**
@@ -3717,7 +3738,7 @@ InternalShellHexCharToUintn (
 /**
   Convert a Null-terminated Unicode hexadecimal string to a value of type UINT64.
 
-  This function returns a value of type UINTN by interpreting the contents
+  This function returns a value of type UINT64 by interpreting the contents
   of the Unicode string specified by String as a hexadecimal number.
   The format of the input Unicode string String is:
 
@@ -3785,16 +3806,16 @@ InternalShellStrHexToUint64 (
   Result = 0;
 
   //
-  // Skip spaces if requested
+  // there is a space where there should't be
   //
-  while (StopAtSpace && *String == L' ') {
-    String++;
+  if (*String == L' ') {
+    return (EFI_INVALID_PARAMETER);
   }
 
   while (ShellIsHexaDecimalDigitCharacter (*String)) {
     //
     // If the Hex Number represented by String overflows according
-    // to the range defined by UINTN, then ASSERT().
+    // to the range defined by UINT64, then return EFI_DEVICE_ERROR.
     //
     if (!(Result <= (RShiftU64((((UINT64) ~0) - InternalShellHexCharToUintn (*String)), 4)))) {
 //    if (!(Result <= ((((UINT64) ~0) - InternalShellHexCharToUintn (*String)) >> 4))) {
@@ -3877,15 +3898,18 @@ InternalShellStrDecimalToUint64 (
   Result = 0;
 
   //
-  // Skip spaces if requested
+  // Stop upon space if requested 
+  // (if the whole value was 0)
   //
-  while (StopAtSpace && *String == L' ') {
-    String++;
+  if (StopAtSpace && *String == L' ') {
+    *Value = Result;
+    return (EFI_SUCCESS);
   }
+
   while (ShellIsDecimalDigitCharacter (*String)) {
     //
     // If the number represented by String overflows according
-    // to the range defined by UINT64, then ASSERT().
+    // to the range defined by UINT64, then return EFI_DEVICE_ERROR.
     //
 
     if (!(Result <= (DivU64x32((((UINT64) ~0) - (*String - L'0')),10)))) {
