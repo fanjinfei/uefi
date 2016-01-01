@@ -42,6 +42,12 @@ QemuFwCfgIsAvailable (
   QemuFwCfgSelectItem (QemuFwCfgItemSignature);
   Signature = QemuFwCfgRead32 ();
   DEBUG ((EFI_D_INFO, "FW CFG Signature: 0x%x\n", Signature));
+
+  if (Signature == SIGNATURE_32 ('V', 'M', 'M', 'V')) {
+    DEBUG ((EFI_D_INFO, "FwCfg interface is supported.\n"));
+    return TRUE;
+  }
+
   QemuFwCfgSelectItem (QemuFwCfgItemInterfaceVersion);
   Revision = QemuFwCfgRead32 ();
   DEBUG ((EFI_D_INFO, "FW CFG Revision: 0x%x\n", Revision));
