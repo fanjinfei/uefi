@@ -265,7 +265,6 @@ MiscInitialization (
     default:
       DEBUG ((EFI_D_ERROR, "%a: Unknown Host Bridge Device ID: 0x%04x\n",
         __FUNCTION__, HostBridgeDevId));
-      ASSERT (FALSE);
       return;
   }
   PcdSet16 (PcdOvmfHostBridgePciDevId, HostBridgeDevId);
