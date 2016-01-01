@@ -21,6 +21,7 @@ import uuid
 
 import Common.EdkLogger as EdkLogger
 import Common.GlobalData as GlobalData
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 
 from Common.String import *
 from Common.DataType import *
@@ -147,6 +148,7 @@ class DscBuildData(PlatformBuildClassObject):
         self._Pcds              = None
         self._DecPcds           = None
         self._BuildOptions      = None
+        self._ModuleTypeOptions = None
         self._LoadFixAddress    = None
         self._RFCLanguages      = None
         self._ISOLanguages      = None
@@ -165,7 +167,7 @@ class DscBuildData(PlatformBuildClassObject):
             ModuleFile = PathClass(NormPath(Record[0]), GlobalData.gWorkspace, Arch=self._Arch)
             RecordList = self._RawData[MODEL_META_DATA_COMPONENT_SOURCE_OVERRIDE_PATH, self._Arch, None, ModuleId]
             if RecordList != []:
-                SourceOverridePath = os.path.join(GlobalData.gWorkspace, NormPath(RecordList[0][0]))
+                SourceOverridePath = mws.join(GlobalData.gWorkspace, NormPath(RecordList[0][0]))
 
                 # Check if the source override path exists
                 if not os.path.isdir(SourceOverridePath):
@@ -754,18 +756,37 @@ class DscBuildData(PlatformBuildClassObject):
         if self._BuildOptions == None:
             self._BuildOptions = sdict()
             #
-            # Retrieve build option for EDKII style module
+            # Retrieve build option for EDKII and EDK style module
             #
-            RecordList = self._RawData[MODEL_META_DATA_BUILD_OPTION, self._Arch, EDKII_NAME]
-            for ToolChainFamily, ToolChain, Option, Dummy1, Dummy2, Dummy3, Dummy4 in RecordList:
-                self._BuildOptions[ToolChainFamily, ToolChain, EDKII_NAME] = Option
-            #
-            # Retrieve build option for EDK style module
-            #
-            RecordList = self._RawData[MODEL_META_DATA_BUILD_OPTION, self._Arch, EDK_NAME]     
-            for ToolChainFamily, ToolChain, Option, Dummy1, Dummy2, Dummy3, Dummy4 in RecordList:
-                self._BuildOptions[ToolChainFamily, ToolChain, EDK_NAME] = Option
+            for CodeBase in (EDKII_NAME, EDK_NAME):
+                RecordList = self._RawData[MODEL_META_DATA_BUILD_OPTION, self._Arch, CodeBase]
+                for ToolChainFamily, ToolChain, Option, Dummy1, Dummy2, Dummy3, Dummy4 in RecordList:
+                    CurKey = (ToolChainFamily, ToolChain, CodeBase)
+                    #
+                    # Only flags can be appended
+                    #
+                    if CurKey not in self._BuildOptions or not ToolChain.endswith('_FLAGS') or Option.startswith('='):
+                        self._BuildOptions[CurKey] = Option
+                    else:
+                        self._BuildOptions[CurKey] += ' ' + Option
         return self._BuildOptions
+
+    def GetBuildOptionsByModuleType(self, Edk, ModuleType):
+        if self._ModuleTypeOptions == None:
+            self._ModuleTypeOptions = sdict()
+        if (Edk, ModuleType) not in self._ModuleTypeOptions:
+            options = sdict()
+            self._ModuleTypeOptions[Edk, ModuleType] = options
+            DriverType = '%s.%s' % (Edk, ModuleType)
+            RecordList = self._RawData[MODEL_META_DATA_BUILD_OPTION, self._Arch, DriverType]
+            for ToolChainFamily, ToolChain, Option, Arch, Type, Dummy3, Dummy4 in RecordList:
+                if Type == DriverType:
+                    Key = (ToolChainFamily, ToolChain, Edk)
+                    if Key not in options or not ToolChain.endswith('_FLAGS') or Option.startswith('='):
+                        options[Key] = Option
+                    else:
+                        options[Key] += ' ' + Option
+        return self._ModuleTypeOptions[Edk, ModuleType]
 
     ## Retrieve non-dynamic PCD settings
     #
@@ -1116,7 +1137,7 @@ class DscBuildData(PlatformBuildClassObject):
                                                 TokenSpaceGuid,
                                                 self._PCD_TYPE_STRING_[Type],
                                                 '',
-                                                '',
+                                                InitialValue,
                                                 '',
                                                 MaxDatumSize,
                                                 {SkuName : SkuInfo},
@@ -1842,11 +1863,11 @@ class InfBuildData(ModuleBuildClassObject):
                         LineNo = Record[6]
                         break
                 EdkLogger.error("build", FORMAT_NOT_SUPPORTED,
-                                "MODULE_TYPE %s is not supported for EDK II, valid values are:\n %s" % (self._ModuleType,' '.join(l for l in SUP_MODULE_LIST)), 
+                                "MODULE_TYPE %s is not supported for EDK II, valid values are:\n %s" % (self._ModuleType, ' '.join(l for l in SUP_MODULE_LIST)),
                                 File=self.MetaFile, Line=LineNo)
             if (self._Specification == None) or (not 'PI_SPECIFICATION_VERSION' in self._Specification) or (int(self._Specification['PI_SPECIFICATION_VERSION'], 16) < 0x0001000A):
                 if self._ModuleType == SUP_MODULE_SMM_CORE:
-                    EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "SMM_CORE module type can't be used in the module with PI_SPECIFICATION_VERSION less than 0x0001000A", File=self.MetaFile)                
+                    EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "SMM_CORE module type can't be used in the module with PI_SPECIFICATION_VERSION less than 0x0001000A", File=self.MetaFile)
             if self._Defs and 'PCI_DEVICE_ID' in self._Defs and 'PCI_VENDOR_ID' in self._Defs \
                and 'PCI_CLASS_CODE' in self._Defs:
                 self._BuildType = 'UEFI_OPTIONROM'
@@ -1855,7 +1876,7 @@ class InfBuildData(ModuleBuildClassObject):
                 self._BuildType = 'UEFI_HII'
             else:
                 self._BuildType = self._ModuleType.upper()
-            
+
             if self._DxsFile:
                 File = PathClass(NormPath(self._DxsFile), self._ModuleDir, Arch=self._Arch)
                 # check the file validation
@@ -1870,7 +1891,7 @@ class InfBuildData(ModuleBuildClassObject):
             if not self._ComponentType:
                 EdkLogger.error("build", ATTRIBUTE_NOT_AVAILABLE,
                                 "COMPONENT_TYPE is not given", File=self.MetaFile)
-            self._BuildType = self._ComponentType.upper()                
+            self._BuildType = self._ComponentType.upper()
             if self._ComponentType in self._MODULE_TYPE_:
                 self._ModuleType = self._MODULE_TYPE_[self._ComponentType]
             if self._ComponentType == 'LIBRARY':
@@ -1880,7 +1901,7 @@ class InfBuildData(ModuleBuildClassObject):
             Macros["EDK_SOURCE"] = GlobalData.gEcpSource
             Macros['PROCESSOR'] = self._Arch
             RecordList = self._RawData[MODEL_META_DATA_NMAKE, self._Arch, self._Platform]
-            for Name,Value,Dummy,Arch,Platform,ID,LineNo in RecordList:
+            for Name, Value, Dummy, Arch, Platform, ID, LineNo in RecordList:
                 Value = ReplaceMacro(Value, Macros, True)
                 if Name == "IMAGE_ENTRY_POINT":
                     if self._ModuleEntryPointList == None:
@@ -1934,7 +1955,13 @@ class InfBuildData(ModuleBuildClassObject):
             RecordList = self._RawData[MODEL_META_DATA_HEADER, self._Arch, self._Platform]
             for Record in RecordList:
                 if Record[1] == TAB_INF_DEFINES_INF_VERSION:
-                    self._AutoGenVersion = int(Record[2], 0)
+                    if '.' in Record[2]:
+                        ValueList = Record[2].split('.')
+                        Major = '%04o' % int(ValueList[0], 0)
+                        Minor = '%04o' % int(ValueList[1], 0)
+                        self._AutoGenVersion = int('0x' + Major + Minor, 0)
+                    else:
+                        self._AutoGenVersion = int(Record[2], 0)
                     break
             if self._AutoGenVersion == None:
                 self._AutoGenVersion = 0x00010000
@@ -1993,7 +2020,7 @@ class InfBuildData(ModuleBuildClassObject):
             if self._Header_ == None:
                 self._GetHeaderInfo()
             if self._Guid == None:
-                self._Guid = '00000000-0000-0000-000000000000'
+                self._Guid = '00000000-0000-0000-0000-000000000000'
         return self._Guid
 
     ## Retrieve module version
@@ -2159,8 +2186,11 @@ class InfBuildData(ModuleBuildClassObject):
                 if self.AutoGenVersion < 0x00010005:
                     Macros["EDK_SOURCE"] = GlobalData.gEcpSource
                     Macros['PROCESSOR'] = self._Arch
+                    SourceFile = NormPath(Record[0], Macros)
+                    if SourceFile[0] == os.path.sep:
+                        SourceFile = mws.join(GlobalData.gWorkspace, SourceFile[1:])
                     # old module source files (Edk)
-                    File = PathClass(NormPath(Record[0], Macros), self._ModuleDir, self._SourceOverridePath,
+                    File = PathClass(SourceFile, self._ModuleDir, self._SourceOverridePath,
                                      '', False, self._Arch, ToolChainFamily, '', TagName, ToolCode)
                     # check the file validation
                     ErrorCode, ErrorInfo = File.Validate(CaseSensitive=False)
@@ -2323,10 +2353,21 @@ class InfBuildData(ModuleBuildClassObject):
                     if File[0] == '.':
                         File = os.path.join(self._ModuleDir, File)
                     else:
-                        File = os.path.join(GlobalData.gWorkspace, File)
+                        File = mws.join(GlobalData.gWorkspace, File)
                     File = RealPath(os.path.normpath(File))
                     if File:
                         self._Includes.append(File)
+                    if not File and Record[0].find('EFI_SOURCE') > -1:
+                        # tricky to regard WorkSpace as EFI_SOURCE
+                        Macros['EFI_SOURCE'] = GlobalData.gWorkspace
+                        File = NormPath(Record[0], Macros)
+                        if File[0] == '.':
+                            File = os.path.join(self._ModuleDir, File)
+                        else:
+                            File = os.path.join(GlobalData.gWorkspace, File)
+                        File = RealPath(os.path.normpath(File))
+                        if File:
+                            self._Includes.append(File)
         return self._Includes
 
     ## Retrieve packages this module depends on
@@ -2373,7 +2414,7 @@ class InfBuildData(ModuleBuildClassObject):
                 ToolChainFamily = Record[0]
                 ToolChain = Record[1]
                 Option = Record[2]
-                if (ToolChainFamily, ToolChain) not in self._BuildOptions:
+                if (ToolChainFamily, ToolChain) not in self._BuildOptions or Option.startswith('='):
                     self._BuildOptions[ToolChainFamily, ToolChain] = Option
                 else:
                     # concatenate the option string if they're for the same tool
@@ -2543,7 +2584,7 @@ class InfBuildData(ModuleBuildClassObject):
                                 'build',
                                 FORMAT_INVALID,
                                 "No TokenValue for PCD [%s.%s] in [%s]!" % (TokenSpaceGuid, PcdCName, str(Package)),
-                                File =self.MetaFile, Line=LineNo,
+                                File=self.MetaFile, Line=LineNo,
                                 ExtraData=None
                                 )                        
                     #
@@ -2556,7 +2597,7 @@ class InfBuildData(ModuleBuildClassObject):
                                     'build',
                                     FORMAT_INVALID,
                                     "The format of TokenValue [%s] of PCD [%s.%s] in [%s] is invalid:" % (Pcd.TokenValue, TokenSpaceGuid, PcdCName, str(Package)),
-                                    File =self.MetaFile, Line=LineNo,
+                                    File=self.MetaFile, Line=LineNo,
                                     ExtraData=None
                                     )
                             
@@ -2570,19 +2611,19 @@ class InfBuildData(ModuleBuildClassObject):
                                 EdkLogger.error(
                                             'build',
                                             FORMAT_INVALID,
-                                            "The format of TokenValue [%s] of PCD [%s.%s] in [%s] is invalid, as a decimal it should between: 0 - 4294967295!"% (Pcd.TokenValue, TokenSpaceGuid, PcdCName, str(Package)),
-                                            File =self.MetaFile, Line=LineNo,
+                                            "The format of TokenValue [%s] of PCD [%s.%s] in [%s] is invalid, as a decimal it should between: 0 - 4294967295!" % (Pcd.TokenValue, TokenSpaceGuid, PcdCName, str(Package)),
+                                            File=self.MetaFile, Line=LineNo,
                                             ExtraData=None
-                                            )                                
+                                            )
                         except:
                             EdkLogger.error(
                                         'build',
                                         FORMAT_INVALID,
-                                        "The format of TokenValue [%s] of PCD [%s.%s] in [%s] is invalid, it should be hexadecimal or decimal!"% (Pcd.TokenValue, TokenSpaceGuid, PcdCName, str(Package)),
-                                        File =self.MetaFile, Line=LineNo,
+                                        "The format of TokenValue [%s] of PCD [%s.%s] in [%s] is invalid, it should be hexadecimal or decimal!" % (Pcd.TokenValue, TokenSpaceGuid, PcdCName, str(Package)),
+                                        File=self.MetaFile, Line=LineNo,
                                         ExtraData=None
                                         )
-                    
+
                     Pcd.DatumType = PcdInPackage.DatumType
                     Pcd.MaxDatumSize = PcdInPackage.MaxDatumSize
                     Pcd.InfDefaultValue = Pcd.DefaultValue
@@ -2594,7 +2635,7 @@ class InfBuildData(ModuleBuildClassObject):
                             'build',
                             FORMAT_INVALID,
                             "PCD [%s.%s] in [%s] is not found in dependent packages:" % (TokenSpaceGuid, PcdCName, self.MetaFile),
-                            File =self.MetaFile, Line=LineNo,
+                            File=self.MetaFile, Line=LineNo,
                             ExtraData="\t%s" % '\n\t'.join([str(P) for P in self.Packages])
                             )
             Pcds[PcdCName, TokenSpaceGuid] = Pcd
@@ -2777,7 +2818,7 @@ class WorkspaceDatabase(object):
     def __init__(self, DbPath, RenewDb=False):
         self._DbClosedFlag = False
         if not DbPath:
-            DbPath = os.path.normpath(os.path.join(GlobalData.gWorkspace, 'Conf', GlobalData.gDatabasePath))
+            DbPath = os.path.normpath(mws.join(GlobalData.gWorkspace, 'Conf', GlobalData.gDatabasePath))
 
         # don't create necessary path for db in memory
         if DbPath != ':memory:':
@@ -2905,7 +2946,7 @@ determine whether database file is out of date!\n")
     ## Summarize all packages in the database
     def GetPackageList(self, Platform, Arch, TargetName, ToolChainTag):
         self.Platform = Platform
-        PackageList =[]
+        PackageList = []
         Pa = self.BuildObject[self.Platform, 'COMMON']
         #
         # Get Package related to Modules
@@ -2922,8 +2963,8 @@ determine whether database file is out of date!\n")
             LibObj = self.BuildObject[Lib, Arch, TargetName, ToolChainTag]
             for Package in LibObj.Packages:
                 if Package not in PackageList:
-                    PackageList.append(Package)            
-        
+                    PackageList.append(Package)
+
         return PackageList
 
     ## Summarize all platforms in the database

@@ -1,7 +1,7 @@
 /** @file
   CPU DXE MP support
 
-  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -15,8 +15,12 @@
 #ifndef _CPU_MP_H_
 #define _CPU_MP_H_
 
+#include <Ppi/SecPlatformInformation.h>
+#include <Ppi/SecPlatformInformation2.h>
 #include <Protocol/MpService.h>
 #include <Library/SynchronizationLib.h>
+#include <Library/HobLib.h>
+#include <Library/ReportStatusCodeLib.h>
 
 /**
   Initialize Multi-processor support.
@@ -637,6 +641,19 @@ FreeApStartupCode (
 VOID
 ResetApStackless (
   IN UINT32 ProcessorId
+  );
+
+/**
+  A minimal wrapper function that allows MtrrSetAllMtrrs() to be passed to
+  EFI_MP_SERVICES_PROTOCOL.StartupAllAPs() as Procedure.
+
+  @param[in] Buffer  Pointer to an MTRR_SETTINGS object, to be passed to
+                     MtrrSetAllMtrrs().
+**/
+VOID
+EFIAPI
+SetMtrrsFromBuffer (
+  IN VOID *Buffer
   );
 
 #endif // _CPU_MP_H_
