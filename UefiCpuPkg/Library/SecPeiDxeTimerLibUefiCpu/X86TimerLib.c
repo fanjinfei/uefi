@@ -67,6 +67,10 @@ InternalX86Delay (
   // Delay and the Init Count.
   //
   InitCount = GetApicTimerInitCount ();
+  if (InitCount == 0) {
+    SetApicTimerInitCount(0xffffffff);
+    InitCount = 0xffffffff;
+  }
   Times     = Delay / (InitCount / 2);
   Delay     = Delay % (InitCount / 2);
 
